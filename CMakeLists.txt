@@ -33,6 +33,9 @@ target_include_directories(cxx_safety_options SYSTEM INTERFACE
         ${LLVM_INCLUDE_DIRS}
         ${CLANG_INCLUDE_DIRS})
 
+target_include_directories(cxx_safety_options INTERFACE
+        ${PROJECT_SOURCE_DIR}/include)
+
 # LLVM_DEFINITIONS is a single space-separated string, not a list.
 separate_arguments(CXX_SAFETY_LLVM_DEFS NATIVE_COMMAND "${LLVM_DEFINITIONS}")
 target_compile_options(cxx_safety_options INTERFACE ${CXX_SAFETY_LLVM_DEFS})
