@@ -1,2 +1,14 @@
 ## JetBrain editor artifacts
 .idea/
+
+## Build artifacts
+build/
+cmake-build-*/
+
+## CMake
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+## OS
+.DS_Store
