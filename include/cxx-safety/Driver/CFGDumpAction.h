@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef CXX_SAFETY_DRIVER_ASTDUMPACTION_H
-#define CXX_SAFETY_DRIVER_ASTDUMPACTION_H
+#ifndef CXX_SAFETY_DRIVER_CFGDUMPACTION_H
+#define CXX_SAFETY_DRIVER_CFGDUMPACTION_H
 
 #include <memory>
 
@@ -16,18 +16,19 @@
 
 namespace cxx_safety {
 
-/// Lists the function definition in each translation unit.
+/// Builds a CFG for every function definition in the main file and prints its
+/// blocks and edges.
 ///
-/// This is scaffolding for the analysis entry point: it exercises the path
-/// from ClangTool to ASTContext without doing any analysis yet.
-class ASTDumpAction : public clang::ASTFrontendAction {
+/// This is the shape every later analysis operates on, so the dump doubles as
+/// a debugging tool once the data-flow framework exists.
+class CFGDumpAction : public clang::ASTFrontendAction {
 public:
     std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance &CI,
             llvm::StringRef InFile) override;
 };
 
-std::unique_ptr<clang::tooling::FrontendActionFactory> newASTDumpActionFactory();
+    std::unique_ptr<clang::tooling::FrontendActionFactory> newCFGDumpActionFactory();
 
-} // namespace cxx_safety
+}  // namespace cxx_safety
 
-#endif // CXX_SAFETY_DRIVER_ASTDUMPACTION_H
+#endif // CXX_SAFETY_DRIVER_CFGDUMPACTION_H

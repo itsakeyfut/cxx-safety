@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "cxx-safety/Driver/ASTDumpAction.h"
+#include "cxx-safety/Driver/CFGDumpAction.h"
 
 #include "clang/Basic/Version.h"
 #include "clang/Tooling/CommonOptionsParser.h"
@@ -45,5 +45,5 @@ int main(int argc, const char **argv) {
     clang::tooling::ClangTool Tool(OptionsParser->getCompilations(),
             OptionsParser->getSourcePathList());
 
-    return Tool.run(cxx_safety::newASTDumpActionFactory().get());
+    return Tool.run(cxx_safety::newCFGDumpActionFactory().get());
 }
