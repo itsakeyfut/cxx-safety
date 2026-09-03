@@ -9,6 +9,7 @@
 #include "cxx-safety/Driver/CFGDumpAction.h"
 
 #include "clang/Basic/Version.h"
+#include "clang/Tooling/ArgumentsAdjusters.h"
 #include "clang/Tooling/CommonOptionsParser.h"
 #include "clang/Tooling/Tooling.h"
 #include "llvm/Config/llvm-config.h"
@@ -21,12 +22,29 @@ constexpr const char *kVersion = "0.1.0";
 
 llvm::cl::OptionCategory CxxSafetyCategory("cxx-safety options");
 
-const char *const kHelpText = "Analyzes C/C++ sources for memory and thread safety violations.\n";
+const char *const kHelpText =
+        "Analyzes C/C++ sources for memory and thread safety violations.\n"
+        "\n"
+        "Compile options come from a compilation database given with -p, or\n"
+        "from arguments after a trailing '--'.\n";
 
 void printVersion(llvm::raw_ostream &OS) {
     OS << "cxx-safety " << kVersion << "\n";
     OS << "  LLVM  : " << LLVM_VERSION_STRING << "\n";
     OS << "  Clang : " << clang::getClangFullVersion() << "\n";
+}
+
+/// Suppresses the warnings a project enables for its own build.
+///
+/// A compilation database carries flags like -Wall, and reproducing that
+/// output would bury the findings this tool is meant to report. Errors are
+/// unaffected, so a file that fails to parse is still reported.
+clang::tooling::ArgumentsAdjuster getWarningSuppressionAdjuster() {
+    return [](const clang::tooling::CommandLineArguments &Args, llvm::StringRef) {
+        clang::tooling::CommandLineArguments Adjusted(Args);
+        Adjusted.push_back("-w");
+        return Adjusted;
+    };
 }
 
 } // namespace
@@ -44,6 +62,8 @@ int main(int argc, const char **argv) {
 
     clang::tooling::ClangTool Tool(OptionsParser->getCompilations(),
             OptionsParser->getSourcePathList());
+
+    Tool.appendArgumentsAdjuster(getWarningSuppressionAdjuster());
 
     return Tool.run(cxx_safety::newCFGDumpActionFactory().get());
 }

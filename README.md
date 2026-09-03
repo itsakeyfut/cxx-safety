@@ -23,6 +23,18 @@ cmake --build build -j
 ./build/src/driver/cxx-safety
 ```
 
+## Usage
+
+Compile options come from a compilation database:
+
+console +cxx-safety -p build src/foo.cpp src/bar.cpp +
+
+-p takes the directory holding compile_commands.json. For a single file
+with no database, pass the options directly instead:
+
+console +cxx-safety foo.cpp -- -std=c++20 +
+
+
 Passing `Clang_DIR` explicitly matters when several LLVM versions are installed
 side by side: `find_package(Clang)` may otherwise pick a different one than
 `LLVM_DIR` points to.
