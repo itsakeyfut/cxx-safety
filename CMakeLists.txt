@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.20...4.1)
 
 project(cxx_safety
         VERSION 0.1.0
-        DESCRIPTION "A unified memory and thread safety analyzer for C/C"
+        DESCRIPTION "A unified memory and thread safety analyzer for C/C++"
         LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -26,8 +26,7 @@ message(STATUS "  ClangConfig.cmake : ${Clang_DIR}")
 message(STATUS "  LLVM_ENABLE_RTTI  : ${LLVM_ENABLE_RTTI}")
 
 # Shared build settings for every target in this project.
-add_library(cxx_safety_options INTERFACE
-        src/driver/main.cpp)
+add_library(cxx_safety_options INTERFACE)
 
 target_include_directories(cxx_safety_options SYSTEM INTERFACE
         ${LLVM_INCLUDE_DIRS}
