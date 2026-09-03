@@ -118,7 +118,14 @@ class CFGDumpConsumer : public clang::ASTConsumer {
 public:
     void HandleTranslationUnit(clang::ASTContext &Context) override {
         const clang::SourceManager &SM = Context.getSourceManager();
-        llvm::outs() << "cxx-safety: " << SM.getFileEntryRefForID(SM.getMainFileID())->getName() << "\n";
+
+        // The main file has no FileEntry when the input comes from stdin or an
+        // in-memory buffer, which happens in tests and editor integrations.
+        llvm::StringRef Name = "<input>";
+        if (auto File = SM.getFileEntryRefForID(SM.getMainFileID()))
+            Name = File->getName();
+
+        llvm::outs() << "cxx-safety: " << Name << "\n";
 
         CFGDumper Dumper(Context);
         Dumper.TraverseDecl(Context.getTranslationUnitDecl());
