@@ -27,6 +27,15 @@ llvm::StringRef getVarName(const clang::VarDecl *VD) {
     return VD ? VD->getName() : "<unknown>";
 }
 
+/// Produces a readable label for a function, distinguishing lambda call
+/// operators from named functions.
+std::string getFunctionLabel(const clang::FunctionDecl *FD) {
+    if (const auto *Method = llvm::dyn_cast<clang::CXXMethodDecl>(FD))
+        if (Method->getParent()->isLambda())
+            return "lambda operator()";
+    return FD->getQualifiedNameAsString();
+}
+
 /// Prints the elements a CFG carries besides statements: object destruction,
 /// member initialization, and scope boundaries.
 ///
@@ -125,6 +134,21 @@ class CFGDumper : public clang::RecursiveASTVisitor<CFGDumper> {
 public:
     explicit CFGDumper(clang::ASTContext &Context): Context(Context) {}
 
+    /// Descends into a lambda body.
+    ///
+    /// The closure type and its call operator are implicit, so the default
+    /// traversal never reaches them and the body collapses into a single
+    /// expression, Enabling shouldVisitImplicitCode would reach them, but also
+    /// every compiler-generated copy constructor and assignment operator.
+    bool TraverseLambdaExpr(clang::LambdaExpr *LE) {
+        if (!clang::RecursiveASTVisitor<CFGDumper>::TraverseLambdaExpr(LE))
+            return false;
+
+        if (clang::CXXMethodDecl *Call = LE->getCallOperator())
+            dumpFunction(Call);
+        return true;
+    }
+
     bool VisitFunctionDecl(clang::FunctionDecl*FD) {
         if (!FD->hasBody() || !FD->isThisDeclarationADefinition())
             return true;
@@ -133,6 +157,12 @@ public:
         if (!SM.isInMainFile(FD->getLocation()))
             return true;
 
+        dumpFunction(FD);
+        return true;
+    }
+
+private:
+    void dumpFunction(const clang::FunctionDecl *FD) {
         clang::CFG::BuildOptions Options;
         // Without this the builder folds subexpressions into their parent statement.
         // Data-flow analysis needs each read and write as its own element, so every statement is added.
@@ -154,23 +184,20 @@ public:
 
         std::unique_ptr<clang::CFG> Graph = clang::CFG::buildCFG(FD, FD->getBody(), &Context, Options);
         if (!Graph) {
-            llvm::errs() << "warning: could not build a CFG for '" << FD->getQualifiedNameAsString() << "\n";
-            return true;
+            llvm::errs() << "warning: could not build a CFG for '" << FD->getQualifiedNameAsString() << "'\n";
+            return;
         }
 
-        llvm::outs() << "\nfunction '" << FD->getQualifiedNameAsString() << "' at "
-                << FD->getLocation().printToString(SM) << "\n";
+        const clang:: SourceManager &SM = Context.getSourceManager();
+        llvm::outs() << "\nfunction '" << getFunctionLabel(FD) << "' at " << FD->getLocation().printToString(SM) << "\n";
 
         // Iterating the CFG directly yields blocks in an unspecified order.
         // Reverse post-order is what a forward data-flow analysis wants, and it
         // also reads top to bottom.
         for (const clang::CFGBlock *Block: llvm::reverse(*Graph))
             printBlock(*Block, *Graph, Context, llvm::outs());
-
-        return true;
     }
 
-private:
     clang::ASTContext & Context;
 };
 
