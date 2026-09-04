@@ -9,6 +9,7 @@
 #include "cxx-safety/Driver/CFGDumpAction.h"
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/DeclCXX.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Stmt.h"
@@ -20,9 +21,49 @@ namespace cxx_safety {
 
 namespace {
 
+/// Names the variable a CFG element refers to, or "<unknown>" when the element
+/// carries no declaration.
+llvm::StringRef getVarName(const clang::VarDecl *VD) {
+    return VD ? VD->getName() : "<unknown>";
+}
+
+/// Prints the elements a CFG carries besides statements: object destruction,
+/// member initialization, and scope boundaries.
+///
+/// These are implicit in the source, which is why they need spelling out here.
+bool printNonStmtElement(const clang::CFGElement &Element, llvm::raw_ostream & OS) {
+    if (std::optional<clang::CFGAutomaticObjDtor> Dtor = Element.getAs<clang::CFGAutomaticObjDtor>()) {
+        OS << "~" << getVarName(Dtor->getVarDecl()) << "() (automatic)\n";
+        return true;
+    }
+    if (Element.getAs<clang::CFGTemporaryDtor>()) {
+        OS << "~temporary()\n";
+        return true;
+    }
+    if (std::optional<clang::CFGInitializer> Init = Element.getAs<clang::CFGInitializer>()) {
+        const clang::CXXCtorInitializer *CI = Init->getInitializer();
+        if (const clang::FieldDecl *Field = CI->getAnyMember())
+            OS << "init " << Field->getName() << "\n";
+        else
+            OS << "init <base>\n";
+        return true;
+    }
+    if (std::optional<clang::CFGLifetimeEnds> Ends = Element.getAs<clang::CFGLifetimeEnds>()) {
+        OS << "lifetime ends: " << getVarName(Ends->getVarDecl()) << "\n";
+        return true;
+    }
+    if (std::optional<clang::CFGScopeBegin> Begin = Element.getAs<clang::CFGScopeBegin>()) {
+        OS << "scope begin: " << getVarName(Begin->getVarDecl()) << "\n";
+        return true;
+    }
+    if (std::optional<clang::CFGScopeEnd> End = Element.getAs<clang::CFGScopeEnd>()) {
+        OS << "scope end: " << getVarName(End->getVarDecl()) << "\n";
+        return true;
+    }
+    return false;
+}
+
 void printElement(const clang::CFGElement &Element, const clang::ASTContext &Context, llvm::raw_ostream &OS) {
-    // A CFG holds more than statements: implicit destructor calls, lifetime markers, and so on.
-    // Only statements matter for now, but the others become relevant once destruction is tracked.
     if (std::optional<clang::CFGStmt> Stmt = Element.getAs<clang::CFGStmt>()) {
         const clang::Stmt *S = Stmt->getStmt();
         S->printPretty(OS, nullptr, clang::PrintingPolicy(Context.getLangOpts()));
@@ -34,7 +75,11 @@ void printElement(const clang::CFGElement &Element, const clang::ASTContext &Con
             OS << "\n";
         return;
     }
-    OS << "<" << Element.getKind() << ">\n";
+
+    if (printNonStmtElement(Element, OS))
+        return;
+
+    OS << "<kind " << Element.getKind() << ">\n";
 }
 
 void printBlock(const clang::CFGBlock &Block, const clang::CFG &Graph, const clang::ASTContext &Context,
@@ -92,6 +137,21 @@ public:
         // Without this the builder folds subexpressions into their parent statement.
         // Data-flow analysis needs each read and write as its own element, so every statement is added.
         Options.setAllAlwaysAdd();
+
+        // Object creation and destruction are implicit in the source but explicit
+        // in the CFG, and every validity analysis is built on them.
+        Options.AddInitializers = true;
+        Options.AddImplicitDtors = true;
+        Options.AddTemporaryDtors = true;
+
+        // Lifetime markers cover non-class types, which have no destructor to
+        // observe. Detecting a use of an `int` after its scope ends depends on
+        // them.
+        Options.AddLifetime = true;
+
+        // Scope boundaries are what lifetime markers are anchored to.
+        Options.AddScopes = true;
+
         std::unique_ptr<clang::CFG> Graph = clang::CFG::buildCFG(FD, FD->getBody(), &Context, Options);
         if (!Graph) {
             llvm::errs() << "warning: could not build a CFG for '" << FD->getQualifiedNameAsString() << "\n";
